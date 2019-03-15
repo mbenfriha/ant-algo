@@ -1,0 +1,411 @@
+/**
+ * Created by patchouni on 17/07/2017.
+ */
+import $ from 'jquery';
+
+
+class Map {
+    constructor(canvas, height = 10, width = 10) {
+        this.height = height;
+        this.width = width;
+        this.case = 0;
+        this.total = height * width;
+        this.wall = [];
+        this.sizeCase = 40;
+        this.foodLeft = 100;
+        this.food = {};
+        this.nbrCase = (this.total / this.sizeCase) / this.sizeCase;
+        this.canvas = canvas.get(0).getContext("2d");
+        this.cases = [];
+        this.totalY = [];
+        this.totalX = [];
+
+        canvas.attr({width: width + (this.case*2) +1, height: height + (this.case*2) +1})
+    }
+
+    //decrementer food
+    decFood() {
+        this.foodLeft--;
+    }
+
+    //set la case avec les 2 phero
+    setCase(pos, pheroFood, pheroNid) {
+        let casIndex = this.cases.findIndex(cas=> cas.x == pos.x && cas.y == pos.y);
+        let newCase = {x: pos.x, y: pos.y, pheroFood: pheroFood, pheroNid: pheroNid};
+
+        if (casIndex == -1) {
+            this.cases.push(newCase);
+        }
+        else {
+           this.cases[casIndex] = newCase;
+        }
+    }
+
+    //get la case
+    getCase(pos) {
+        let result = this.cases.find(cas => cas.x == pos.x && cas.y == pos.y);
+
+        if (!result) {
+            this.setCase(pos, 0, 0);
+            return this.getCase(pos);
+        }
+
+        return result;
+    }
+
+    //générer la map
+    generateMap() {
+        let p = this.case;
+        let canvas = this.canvas;
+        this.drawingGrid(p, canvas);
+
+        //calcule du nombre de mur en random
+
+        //on ajoute le nombre de case en 40*40 dans des tableau
+        let totalX = [];
+        let totalY = [];
+
+        for(let i=0; i < this.width /this.sizeCase; i++) {
+            totalX.push(i*this.sizeCase);
+        }
+
+        for(let i=0; i < this.height /this.sizeCase; i++) {
+            totalY.push(i*this.sizeCase);
+        }
+
+
+        this.drawingWall(totalX, totalY);
+
+        this.drawingNid(canvas);
+
+        this.drawingFood(totalX, totalY);
+
+        canvas.stroke();
+    }
+
+    drawingWall(totalX, totalY) {
+        let canvas = this.canvas;
+
+        canvas.fillStyle= 'black';
+        let randomWall = Math.floor((Math.random() * Math.ceil(this.nbrCase/7)) + Math.ceil(this.nbrCase/10));
+
+        this.totalX = totalX;
+        this.totalY = totalY;
+
+        //on ajoute les murs aléatoirement selon les tableau
+        for (var z = 0; z <= randomWall; z++) {
+            let x, y;
+            x = totalX[Math.floor(Math.random()*totalX.length)];
+            y = totalY[Math.floor(Math.random()*totalY.length)];
+            if(x !== 0 || y !== 0) {
+                canvas.fillRect(x, y, this.sizeCase, this.sizeCase);
+                this.wall.push({x, y})
+                this.setCase({x, y}, 0, 0);
+            }
+        }
+    }
+
+    randomWall() {
+
+        this.wall.map(wall => this.canvas.clearRect(wall.x, wall.y, this.sizeCase, this.sizeCase));
+        this.wall = [];
+
+        this.drawingWall(this.totalX, this.totalY);
+    }
+
+    //dessiner le nid
+    drawingNid(canvas) {
+        //on dessine la fourmis
+        var img = new Image();
+        var size = this.sizeCase;
+        img.src = '../ant.jpg';
+        img.onload = function(){
+          canvas.drawImage(img, 2, 2, (size - (size/8)), (size - (size/8)));
+        }
+        canvas.fillStyle= 'green';
+        canvas.fillRect(0, 0, this.sizeCase, this.sizeCase);
+
+        canvas.fillStyle= 'red';
+
+        this.setCase({x: 0, y: 0}, 0, 1);
+    }
+
+
+    //dessiner la food
+    drawingFood(totalX, totalY) {
+        let foodX = totalX[Math.floor(Math.random()*totalX.length)];
+        let foodY = totalY[Math.floor(Math.random()*totalY.length)];
+        if(this.wall.find(wall => wall.x !== foodX && wall.y !== foodY) && foodX !== 0 && foodY !== 0) {
+            this.canvas.fillRect(foodX, foodY, this.sizeCase, this.sizeCase);
+            this.food = {x: foodX, y: foodY};
+            this.setCase({x: foodX, y: foodY}, 1, 0);
+        }
+        else
+            this.drawingFood(totalX, totalY)
+    }
+
+    //dssiner la grid
+    drawingGrid(p, canvas) {
+
+        //generation de la grille
+        for (var x = 0; x <= this.width; x += this.sizeCase) {
+            canvas.moveTo(0.5 + x + p, p);
+            canvas.lineTo(0.5 + x + p, this.height + p);
+        }
+
+        for (var x = 0; x <= this.height; x += this.sizeCase) {
+            canvas.moveTo(p, 0.5 + x + p);
+            canvas.lineTo(this.width + p, 0.5 + x + p);
+        }
+        canvas.strokeStyle = "#adadad";
+        canvas.stroke();
+
+        // dessiner cadre rouge
+
+        canvas.beginPath();
+        canvas.moveTo(0.5 + p, 0+p);
+        canvas.lineTo(this.width+p, 0.5+p);
+        canvas.moveTo(this.width+p, 0.5+p);
+        canvas.lineTo(this.width+p, this.height+p);
+        canvas.moveTo(this.width+p, this.height+p);
+        canvas.lineTo(0.5+p, this.height+p);
+        canvas.moveTo(0.5+p, this.height+p);
+        canvas.lineTo(0.5+p, 0.5+p);
+        canvas.lineWidth = 3;
+        canvas.strokeStyle = "black";
+    }
+
+    //dessiner l'insect avec la food
+    drawingAnt(pos, prevPos) {
+        let canvas = this.canvas;
+
+        canvas.clearRect(prevPos.x, prevPos.y, this.sizeCase, this.sizeCase)
+
+        canvas.fillStyle= '#e4b89d';
+        canvas.fillRect(pos.x, pos.y, this.sizeCase, this.sizeCase);
+
+        //food drawing
+        canvas.fillStyle= 'red';
+        this.canvas.fillRect(this.food.x, this.food.y, this.sizeCase, this.sizeCase);
+
+        this.drawingCas(this.getCase(prevPos));
+    }
+
+    //dessiner les phéromones
+    drawingCas(cas) {
+        let canvas = this.canvas;
+        canvas.fillStyle = 'rgba(0, 255, 0, '+ cas.pheroFood +')';
+        canvas.fillRect(cas.x, cas.y, this.sizeCase, this.sizeCase);
+
+
+        canvas.fillStyle = 'rgba(0, 0, 255, '+ (cas.pheroNid/2) +')';
+        canvas.fillRect(cas.x, cas.y, this.sizeCase, this.sizeCase);
+    }
+}
+
+class Ant {
+    constructor(map) {
+        this._state = 'empty';
+        this._case = {x:0, y:0};
+        this._map = map;
+        this.retour = 0;
+        this.exploration=1;;
+        this.confiance=1;
+        this.evaporation=0.999;
+        this.bruit=0.7;
+    }
+
+    get state() {return this._state }
+
+    get case() { return this._case; }
+
+
+    set state(newState) {this._state=newState}
+
+    set case(newCase) {this._case = newCase}
+
+    getRetour() {return this.retour;}
+
+
+    //récupérer la case suivante
+    getNextCase(cas, type) {
+        //pas de random pour le moment
+        let isRandom = false;
+
+        //get les possibilité
+        let possibilities = [
+            this._map.getCase({x: cas.x + this._map.sizeCase,   y: cas.y}),
+            this._map.getCase({x: cas.x - this._map.sizeCase,   y: cas.y}),
+            this._map.getCase({x: cas.x,                        y: cas.y -this._map.sizeCase}),
+            this._map.getCase({x: cas.x,                        y: cas.y +this._map.sizeCase})
+        ];
+
+        //detect les mur et les sorties de map
+        //droite
+        if(this._map.wall.find(wall => wall.x == cas.x + this._map.sizeCase && wall.y == cas.y) || cas.x + this._map.sizeCase > this._map.width)
+        {
+            possibilities[0] = null;
+        }
+
+        //gauche
+        if(this._map.wall.find(wall => wall.x == cas.x - this._map.sizeCase && wall.y == cas.y) || cas.x - this._map.sizeCase < 0)
+        {
+            possibilities[1] = null;
+        }
+        //haut
+        if(this._map.wall.find(wall => wall.x == cas.x && wall.y == cas.y - this._map.sizeCase) || cas.y - this._map.sizeCase < 0)
+        {
+            possibilities[2] = null;
+        }
+        //bas
+        if(this._map.wall.find(wall => wall.x == cas.x && wall.y == cas.y + this._map.sizeCase) || cas.y + this._map.sizeCase >= this._map.height) {
+            possibilities[3] = null;
+        }
+
+        let indexOfMaxVal = null;
+        let maxValNeighbours = -Infinity;
+        let sumPheroNeighbours = 0;
+
+        possibilities.map((possibility, i) => {
+            if (possibility != null) {
+                //récupérer le voisin dont la valeur de la phero<type> est max
+                if (maxValNeighbours < possibility[type]) {
+                    maxValNeighbours = possibility[type];
+                    indexOfMaxVal = i;
+                }
+
+                //on addition le total des phero<type>
+                sumPheroNeighbours += possibility[type];
+            }
+        });
+
+        cas = this._map.getCase({x: cas.x, y: cas.y});
+
+
+        let avg = sumPheroNeighbours / 4;
+        // b(a * max(possibilities.<type>)) + (1 - a) * avg(possibilities.<type>))
+        let newPhero = this.evaporation * (this.bruit * maxValNeighbours + (1 - this.bruit) * avg);
+
+        /*
+         * si il s'agit d'un pheroFood et qu'il est plus élevé alors :
+         *      on met à jour avec le pherofood
+         * sinon
+         *      si on est pas dans le nid et si la valeur de la pheroNid est + grand :
+         *          on met à jour le pheroNid
+         *
+         */
+        if (type == 'pheroFood')
+        {
+            if (newPhero > cas.pheroFood) {
+                this._map.setCase({x: cas.x, y: cas.y}, newPhero, cas.pheroNid);
+            }
+
+            // si la plus grande des phéros environante est égale <= 0 alors : on choisira une case au hasard
+            isRandom = possibilities[indexOfMaxVal].pheroFood <= 0;
+        }
+        else {
+            if (cas.x != 0 || cas.y != 0) {
+                if (newPhero > cas.pheroNid) {
+                    this._map.setCase({x: cas.x, y: cas.y}, cas.pheroFood, newPhero);
+                }
+            } else {
+                isRandom = true;
+            }
+        }
+
+        /*
+         * On choisi une case aléatoire lorsque :
+         * - Nous l'avons décidé
+         * - Ou lorsque la confiance est faible
+         */
+        let random = Math.random();
+        if (isRandom || (random >= this.confiance && this.confiance < 1)) {
+            let possibility;
+            do {
+                possibility = possibilities[Math.floor(Math.random()*possibilities.length)];
+            } while(possibility == null);
+
+            return possibility;
+        }
+
+        //retourne la meilleur possibilité (pas de hasard)
+        return possibilities[indexOfMaxVal];
+    }
+
+    moveToCase(cas) {
+        let prevCase = this._case;
+        this._case = cas;
+
+        /* On met à jour les phero*/
+        this.getNextCase(this._case, 'pheroNid');
+        this.getNextCase(this._case, 'pheroFood');
+
+        /*
+         * si la fourmis est pleine on change son état et elle revient vers le nid
+         * sinon on change son état a vide et elle retour vers la nourritère
+         */
+        if(this._map.food.x == this._case.x && this._map.food.y == this._case.y) {
+            this._state = 'full';
+            this._map.decFood()
+        } else {
+            if(this._case.x == 0 && this._case.y == 0 && this._state == 'full') {
+                this._state = 'empty';
+                this.retour++;
+            }
+        }
+
+        //on dessine la fourmis
+        this._map.drawingAnt(this._case, prevCase);
+        return this._case;
+    }
+
+    walkAnt() {
+        //on choisis les phero que la fourmis suis selon son état
+        this.moveToCase(this.getNextCase(this._case, this._state == 'empty' ? 'pheroFood' : 'pheroNid'));
+    }
+}
+
+const map = new Map($('#laby'), 400, 600);
+
+let mapNew = map.generateMap();
+
+
+const t  = [];
+for (i= 0; i < 10; i++)
+    t.push(new Ant(map));
+
+console.log(map);
+
+
+let i = 0;
+
+function animation_loop() {
+    t.map(fou => {
+        if (fou.getRetour() < 3) {
+            fou.walkAnt();
+        }
+    });
+
+    console.log(map.foodLeft);
+    if(map.foodLeft < 0)
+        i = -2;
+    setTimeout(function() {
+        i++;
+        if (i > -1) {
+            animation_loop();
+        }
+    }, 30);
+};
+animation_loop();
+
+
+
+$('#wall').click(event => {
+    map.randomWall();
+    colony.setExploration(input-exploration);
+    colony.setExploration(input-exploration);
+    colony.setExploration(input-exploration);
+})
+
+$('#laby').mousemove(function( event ) {
+});
